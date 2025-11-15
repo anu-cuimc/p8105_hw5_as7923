@@ -6,7 +6,7 @@ output: github_document
 ---
 
 Global settings for assignment:
-```{r setup}
+```{r setup, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(tidyverse)
@@ -294,7 +294,7 @@ knitr::kable(
 )
 ```
 
-here are `r nrow(homicide_summary)` unique city-state combinations in the dataset (Note: Tulsa appears in both AL and OK, due to error in the original dataset).
+Here are `r nrow(homicide_summary)` unique city-state combinations in the dataset (**Note:** Tulsa appears in both AL and OK, due to error in the original dataset).
 
 
 ### Proportion test for Baltimore, MD
@@ -357,7 +357,7 @@ knitr::kable(
 
 ### Creating plots with error bars
 
-```{r, fig.length = 15, fig.width = 12}
+```{r, fig.height = 10, fig.width = 12}
 all_cities_results %>%
   # Ordering by proportion for better visualization
   mutate(city_state = fct_reorder(city_state, estimate)) %>%
@@ -373,8 +373,8 @@ all_cities_results %>%
   labs(
     title = "Proportion of unsolved homicides by city",
     caption = "With 95% confidence intervals",
-    x = "City, State",
+    x = "City, state",
     y = "Proportion of unsolved homicides"
   )
 ```
-Note: the plot shows all 51 city-state combinations from the dataset, including a data entry error where Tulsa appears in both Alabama and Oklahoma.
+**Note:** the plot shows all 51 city-state combinations from the dataset, including a data entry error where Tulsa appears in both Alabama and Oklahoma.
