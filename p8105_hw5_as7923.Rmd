@@ -1,0 +1,319 @@
+---
+title: "P8105 HOMEWORK 5"
+author: "Anu Singh"
+date: "2025-11-14"
+output: github_document
+---
+
+Global settings for assignment:
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+# Setting UNI as seed
+set.seed(7923)
+```
+
+## PROBLEM 1
+
+
+## PROBLEM 2
+
+### Simulation function
+
+First, I will create a function to simulate data from a normal distribution and perform a one-sample t-test:
+
+```{r}
+sim_t_test = function(n = 30, mu = 0, sigma = 5) {
+  # Generating data from Normal(mu, sigma)
+  sim_data = tibble(
+    x = rnorm(n = n, mean = mu, sd = sigma)
+  )
+  
+  # Performing one-sample t-test testing H: μ = 0
+  test_result = t.test(sim_data$x, mu = 0) %>% 
+    broom::tidy() %>% 
+    select(estimate, p.value)
+  
+  return(test_result)
+}
+```
+
+### Simulation for μ = 0
+
+Generating 5000 datasets with μ = 0:
+
+```{r}
+sim_results_mu0 = 
+  # Creating tibble with 5000 rows
+  tibble(iter = 1:5000) %>% 
+  mutate(
+    # Running simulation function 5000 times
+    test_results = map(iter, ~sim_t_test(mu = 0)) 
+  ) %>% 
+  unnest(test_results)
+
+# Preview of results
+head(sim_results_mu0)
+```
+
+### Simulation for μ = {1, 2, 3, 4, 5, 6}
+
+Now I will repeat the same simulation process, but for different values of μ:
+```{r}
+sim_results_all = 
+  tibble(true_mu = c(0, 1, 2, 3, 4, 5, 6)) %>% 
+  mutate(
+    sim_data = map(true_mu, ~tibble(iter = 1:5000) %>% 
+                     mutate(test_results = map(iter, function(x) sim_t_test(mu = .x))) %>% 
+                     unnest(test_results))
+  ) %>% 
+  unnest(sim_data)
+
+# Preview results
+head(sim_results_all)
+```
+
+### Power vs. effect size
+
+I will first calculate the proportion of times the null was rejected (power) for each true μ. Then I will generate a plot of power vs. true value of μ:
+
+```{r}
+power_results = sim_results_all %>% 
+  group_by(true_mu) %>% 
+  summarize(
+    power = mean(p.value < 0.05),
+    n_tests = n()
+  )
+
+power_results
+
+# Plot of power vs. true value of μ
+power_results %>% 
+  ggplot(aes(x = true_mu, y = power)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_line(linewidth = 1, color = "steelblue") +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.1)) +
+  labs(
+    title = "Power vs. effect size in one-sample t-test",
+    x = "True value of μ",
+    y = "Power (proportion of times null rejected)",
+    caption = "n = 30, σ = 5, α = 0.05, 5000 simulations per μ value"
+  )
+```
+
+**Association between effect size and power:** as the true effect size (μ) increases from 0 to 6, the power of the test increases significantly. The relationship is non-linear, with power rising steeply between μ = 1 and μ = 3, then plateauing near 1.0 for larger effect sizes. This shows that larger effect sizes are easier to detect, thereby resulting in higher power.
+
+### Average estimate of μ̂
+
+Next, I will calculate average estimates across all tests and for tests where null was rejected. I will then transpose the data frame for analysis, and create the plot:
+
+```{r}
+
+# Calculating summary statistics, 
+estimate_results = sim_results_all %>% 
+  group_by(true_mu) %>% 
+  summarize(
+    avg_estimate_all = mean(estimate),
+    avg_estimate_rejected = mean(estimate[p.value < 0.05]),
+    n_all = n(),
+    n_rejected = sum(p.value < 0.05)
+  )
+
+estimate_results
+
+# Preparing data for plotting
+plot_data = estimate_results %>% 
+  pivot_longer(
+    cols = c(avg_estimate_all, avg_estimate_rejected),
+    names_to = "condition",
+    values_to = "avg_estimate"
+  ) %>% 
+  mutate(
+    condition = recode(condition,
+                      "avg_estimate_all" = "All samples",
+                      "avg_estimate_rejected" = "Rejected null only")
+  )
+
+# Creating the plot
+ggplot(plot_data, aes(x = true_mu, y = avg_estimate, color = condition)) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +
+  scale_color_viridis_d(end = 0.8) +  
+  labs(
+    title = "Average estimate of μ^ vs. true value of μ",
+    x = "True value of μ",
+    y = "Average estimate of μ̂",
+    color = "Sample type",
+    caption = "Dashed line represents unbiased estimation (estimate = true value)"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+**Is the sample average of μ̂  across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?**
+
+No, the sample average of μ̂  for tests where the null is rejected is not approximately equal to the true value of μ, especially for small effect sizes (μ = 1, 2, 3). This is because:
+
+
+1. When we only look at samples where the null was rejected, we are filtering based on statistical significance. This creates a selection bias where we are more likely to include samples with extreme (larger) estimates of μ̂.
+
+
+2. When the true effect size is small (e.g., μ = 1 or 2), power is low. This means that to achieve significance, the sample must have produced an unusually large estimate. These "lucky" samples overestimate the true effect.
+
+
+3. As the true μ increases (4, 5, 6), power approaches 1.0, thus nearly all samples reject the null. When almost all samples are included, there is less selection bias, and the average estimate among rejected samples converges to the true value.
+
+
+4. The average estimate across all samples (green line) closely follows the true value of μ (the dashed line), thus showing that μ̂  is an unbiased estimator when we do not filter based on significance.
+
+
+Therefore, if we only pay attention to statistically significant findings, we are likely to overestimate effect sizes, especially in cases/studies with low power. This is why the "rejected null only" line sits above the dashed line (thereby overestimating) for small μ values.
+
+
+## PROBLEM 3
+### Description of raw data
+
+```{r}
+# Reading the homicide data
+homicide_data = read_csv("./data/homicide-data.csv")
+
+# Displaying structure of the data
+str(homicide_data)
+
+# Summary of the data
+summary(homicide_data)
+
+# Looking at first few rows
+head(homicide_data)
+
+# Checking unique disposition values
+unique(homicide_data$disposition)
+```
+
+### Description of raw data
+
+The dataset contains `r nrow(homicide_data)` homicide cases across `r n_distinct(homicide_data$city)` cities. It includes the following variables:
+
+* **uid**: unique identifier for each case
+* **reported_date**: date the homicide was reported
+* **victim_last, victim_first**: victim's name
+* **victim_race**: race of the victim
+* **victim_age**: age of the victim
+* **victim_sex**: sex of the victim
+* **city**: city where homicide occurred
+* **state**: state where homicide occurred
+* **lat, lon**: geographic coordinates
+* **disposition**: case status (closed by arrest, closed without arrest, or open/no arrest)
+
+
+### city_state variable and creating summary of homicides by city
+
+```{r}
+homicide_summary = homicide_data %>%
+  # Creating city_state variable
+  mutate(city_state = paste(city, state, sep = ", ")) %>%
+  # Grouping by city_state
+  group_by(city_state) %>%
+  # Calculating total and unsolved homicides
+  summarize(
+    total_homicides = n(),
+    unsolved_homicides = sum(disposition %in% c("Closed without arrest", "Open/No arrest")),
+    .groups = "drop"
+  )
+
+# Displaying the summary
+knitr::kable(
+  homicide_summary,
+  col.names = c("City, state", "Total homicides", "Unsolved homicides"),
+  caption = "Summary of homicides by city",
+)
+```
+
+here are `r nrow(homicide_summary)` unique city-state combinations in the dataset (Note: Tulsa appears in both AL and OK, due to error in the original dataset).
+
+
+### Proportion test for Baltimore, MD
+
+```{r}
+# Filtering for Baltimore, MD
+baltimore_data = homicide_summary %>%
+  filter(city_state == "Baltimore, MD")
+
+# Performing proportion test
+baltimore_test <- prop.test(
+  x = baltimore_data$unsolved_homicides,
+  n = baltimore_data$total_homicides
+)
+
+# Tidying the results
+baltimore_results <- baltimore_test %>%
+  broom::tidy() %>%
+  select(estimate, conf.low, conf.high)
+
+# Displaying results
+baltimore_results
+```
+
+For Baltimore, MD:
+
+- **Estimated proportion of unsolved homicides**: `r round(baltimore_results$estimate, 3)`
+- **95% Confidence Interval**: (`r round(baltimore_results$conf.low, 3)`, `r round(baltimore_results$conf.high, 3)`)
+
+
+### Running prop.test for each city
+
+```{r}
+# Creating a function to run prop.test and extracting estimates and CIs
+prop_test_city = function(unsolved, total) {
+  test_result = prop.test(x = unsolved, n = total)
+  
+  test_result %>%
+    broom::tidy() %>%
+    select(estimate, conf.low, conf.high)
+}
+
+# Applying prop.test to all cities using map2
+all_cities_results = homicide_summary %>%
+  mutate(
+    test_results = map2(unsolved_homicides, total_homicides, prop_test_city)
+  ) %>%
+  unnest(test_results)
+
+# Displaying results
+knitr::kable(
+  all_cities_results,
+  col.names = c("City, state", "Total homicides", "Unsolved homicides", 
+                "Proportion", "95% CI lower", "95% CI upper"),
+  digits = 3,
+  caption = "Proportion of unsolved homicides by city with 95% CIs"
+)
+```
+
+
+### Creating plots with error bars
+
+```{r, fig.length = 15, fig.width = 12}
+all_cities_results %>%
+  # Ordering by proportion for better visualization
+  mutate(city_state = fct_reorder(city_state, estimate)) %>%
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point(size = 2, color = "steelblue") +
+  geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    width = 0.3,
+    color = "steelblue",
+    alpha = 0.7
+  ) +
+  coord_flip() +
+  labs(
+    title = "Proportion of unsolved homicides by city",
+    caption = "With 95% confidence intervals",
+    x = "City, State",
+    y = "Proportion of unsolved homicides"
+  )
+```
+Note: the plot shows all 51 city-state combinations from the dataset, including a data entry error where Tulsa appears in both Alabama and Oklahoma.
