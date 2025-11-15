@@ -18,6 +18,67 @@ set.seed(7923)
 ```
 
 ## PROBLEM 1
+### Function to simulate birthdays and checking for duplicates
+```{r}
+bday_sim = function(n_room) {
+  birthdays = sample(1:365, n_room, replace = TRUE)
+  
+  # Checking if there are duplicate birthdays
+  # If length of unique birthdays < total people, then there is a duplicate
+  repeated_birthday = length(unique(birthdays)) < n_room
+  
+  return(repeated_birthday)
+}
+```
+
+
+### Running simulations for multiple group sizes
+```{r}
+# Creating a dataframe with all combinations of group sizes and iterations
+bday_sim_results = 
+  expand_grid(
+    bdays = 2:50,           
+    iter = 1:10000          
+  ) %>% 
+  mutate(
+    result = map_lgl(bdays, bday_sim)  # running simulation for each row
+  ) %>% 
+  group_by(bdays) %>% 
+  summarize(
+    prob_repeat = mean(result)  # calculating probability for each group size
+  )
+
+# Viewing the results
+head(bday_sim_results, 10)
+```
+
+
+### Creating a plot
+```{r}
+bday_sim_results %>% 
+  ggplot(aes(x = bdays, y = prob_repeat)) +
+  geom_point(alpha = 0.6, color = "steelblue", size = 2) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "Birthday problem: probability of shared birthdays",
+    subtitle = "Based on 10,000 simulations per group size",
+    x = "Number of people in room",
+    y = "Probability of at least one shared birthday"
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "red", alpha = 0.5) +
+  annotate("text", x = 10, y = 0.52, label = "50% probability", 
+           color = "red", size = 3)
+```
+
+
+**Comment on results:**
+
+* The probability of at least two people sharing a birthday increases rapidly as the group size grows.
+
+* With approximately 23 people in a room, there is already about a 50% chance that two people share a birthday.
+
+* By the time we have 50 people in a room, the probability of at least one shared birthday is approximately 97%, approaching near certainty.
 
 
 ## PROBLEM 2
